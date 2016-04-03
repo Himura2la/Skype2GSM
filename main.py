@@ -66,24 +66,16 @@ else:
 def check_incoming(data):
     if data.find('+CMTI: "SM"') >= 0:  # New SMS
         n = data.split(",")[1]
-        if not s.AT("AT+CMGF=0"):  # Switch to PDU
-            print "Is anything works?"
-            return
-
-        s.AT("CMGR=" + n + ",0")  # Ask for SMS
-        if not s.ret:
-            s.get_ret()  # Actual read (there is a delay interrupting the communication)
-        if len(s.ret) > 1:
-            pdu = s.ret[1]
+        s.read_SMS(n)
+        # TODO: Send to Skype
 
 
 waiting4call = True
 s.listening = True
 while True:
     if s.listening:
-        current = s.get_ret(0.1, True)
-        if current:
-            data = (''.join(s.ret))
+        if s.get_ret(0.1, True):
+            data = ''.join(s.ret)
             print "SIM900:", data
             s.listening = False
             check_incoming(data)

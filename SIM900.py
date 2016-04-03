@@ -86,7 +86,7 @@ class SIM900:
                 self.OK = True
             elif len(clean_line) > 0:
                 self.ret.append(clean_line)
-        return self.OK
+        return self.ret
 
     def AT(self, cmd="", safe=False):
         if safe:
@@ -149,6 +149,10 @@ class SIM900:
         self.listening = True
         return r
 
+    @staticmethod
+    def _decode_utf8(byte_string):
+        return ''.join([unichr(int(byte_string[i:i+4], 16)) for i in range(0, len(byte_string), 4)])
+
     def _unsafe_USSD(self, number):
         if self.AT('CUSD=1, "' + number + '"'):
             if self.r == "4":
@@ -170,7 +174,7 @@ class SIM900:
         print "SUCCESS!!!"
         ans = self.ret[0]
         ret = ans.split(",")[1].replace('"', '')
-        ret = ''.join([unichr(int(ret[i:i+4], 16)) for i in range(0, len(ret), 4)])  # that was hard
+        ret = self._decode_utf8(ret)
         return ret
 
     def ballance(self):
@@ -181,6 +185,51 @@ class SIM900:
                 ret = ans.split("OCTATOK ")[1].split(" p.")[0]
                 return float(ret)
 
+    def read_SMS(self, n):
+        if not self.AT("CMGF=1"):  # Switch from PDU
+            print "Is anything works?"
+            return False
+
+        if type(n) is not str or len(n) == 1:
+            self.AT("CMGR=%s,0" % str(n))
+
+            if not self.ret:
+                self.get_ret()  # Actual read
+            if len(self.ret) > 1:
+                _, sender, somefield, date = self.ret[0].split('","')
+                date = date.replace('"', '')
+                text = self.ret[1]
+
+                try:
+                    for c in text: int(c, 16)
+                except ValueError:  # text string
+                    pass
+                else:  # unicode string
+                    text = self._decode_utf8(text)
+
+                print "SMS[" + date + "," + somefield + "," + sender + "]: " + text
+                return date, sender, text
+        else:
+            self.AT('CMGL="%s",0' % n)
+            if not self.ret:
+                self.get_ret(5)  # Actual read
+            return self.ret
+
+    def del_SMS(self, scope, n=None):
+        if scope == scopeOne:
+            if n is None:
+                print "SMS to delete was not specified"
+                return False
+        else:
+            n = 1
+        self.AT('CMGD=' + str(n) + ',' + str(scope))
+        return self.OK
+
+# Constants for del_SMS(scope)
+scopeOne = 0
+scopeRead = 1
+scopeReadAndSent = 3
+scopeAll = 4
 
 if __name__ == "__main__":
     s = SIM900()
@@ -191,15 +240,4 @@ if __name__ == "__main__":
         print "Failed to connect to SIM900"
         exit()
 
-    import smspdu
-
-    s.AT("CMGR=5,0")
-    if not s.ret:
-        s.get_ret()  # Actual read
-    if len(s.ret) > 1:
-        tpdu = s.ret[1]
-        pdu = smspdu.SMS_DELIVER.fromPDU(tpdu, "None")
-        print pdu.user_data
-
-
-    pass
+    print s.read_SMS("ALL")

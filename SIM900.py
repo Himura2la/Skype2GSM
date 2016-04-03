@@ -41,8 +41,8 @@ class SIM900(object):
     def r(self):
         if not self.ret:
             return "Echo:" + str(self.echoed) + \
-                   ", OK:" + str(self.OK) + \
-                   ", Ans:" + self.ans.replace("\n", "\\n").replace("\r", "\\r")
+                   ",OK:" + str(self.OK) + \
+                   ",Ans:'" + self.ans.replace("\n", "\\n").replace("\r", "\\r") + "'"
         elif len(self.ret) > 1:
             return "\\n".join(self.ret)
         elif self.ret[0].find(': ') > 0:
@@ -144,28 +144,30 @@ class SIM900(object):
 
         self.AT('CMGS="' + str(number) + '"')
         if self.ret[0] != "> ":
-            self.ser.write(chr(27))  # Escape
+            self.cmd = str(chr(27))
+            self.ser.write(self.cmd)  # Escape
             print "Sending '" + text + "' to '" + str(number) + "' FAILED: " + str(self.ret)
             return False
 
-        self.ser.write(chr(27))  # CANCEL SENDING
-
-        self.ser.write(text + chr(26))
+        self.cmd = text + chr(26)
+        self.ser.write(self.cmd)
 
         self.get_ret()
         if self.echoed:
             print "Sending '" + text + "' to '" + str(number) + "'...",
         else:
             print "Sending '" + text + "' to '" + str(number) + "' FAILED while typing message: " + str(self.ret)
-            self.ser.write(chr(27))  # Escape
+            self.cmd = str(chr(27))
+            self.ser.write(self.cmd)  # Escape
             return False
 
         self.get_ret(10)  # wait for real answer (typically about 4s)
 
         ans = self.ret[0]
         if ans.count("CMGS") > 0:
-            print "SUCCESS!!! Message Reference:" + ans.split(": ")[1]
-            return True
+            mr = ans.split(": ")[1]
+            print "SUCCESS!!! Message Reference:" + mr
+            return mr
 
         return False
 
@@ -210,7 +212,7 @@ class SIM900(object):
                 ret = ans.split("OCTATOK ")[1].split(" p.")[0]
                 return float(ret)
 
-    def _process_SMS(self, sms):
+    def _process_SMS(self, sms, asText=True):
         if len(sms) != 2:
             print "SMS not found"
             return False
@@ -236,21 +238,28 @@ class SIM900(object):
         else:  # unicode string
             text = self.decode_utf8(text)
 
-        print "SMS(" + status + ")[" + date + "," + mystic_field + "," + sender + "]: " + text
-        return date, sender, text
+        SMS = status, date, mystic_field, sender, text
+        sms = self._SMS_ar2txt(SMS)
+        print sms
+        return sms if asText else SMS
 
-    def read_SMS(self, n="ALL"):
+    @staticmethod
+    def _SMS_ar2txt(array):
+        status, date, mystic_field, sender, text = array
+        return "SMS(" + status + ")[" + date + "," + mystic_field + "," + sender + "]: " + text
+
+    def read_SMS(self, n="ALL", asText=True):
         if not self.AT("CMGF=1"):  # Switch from PDU
             print "Is anything works?"
             return False
 
         if type(n) is not str or len(n) == 1:  # Single reading
             self.AT("CMGR=%s,0" % str(n), wait_for_data=0.3)
-            return self._process_SMS(self.ret)
+            return self._process_SMS(self.ret, asText)
 
         else:   # Batch reading
             self.AT('CMGL="%s",0' % n, wait_for_data=0.5)
-            return [self._process_SMS((self.ret[i], self.ret[i+1])) for i in range(0, len(self.ret), 2)]
+            return [self._process_SMS((self.ret[i], self.ret[i+1]), asText) for i in range(0, len(self.ret), 2)]
 
     def del_SMS(self, scope, n=None):
         if scope == scopeOne:
@@ -278,4 +287,3 @@ if __name__ == "__main__":
         print "Failed to connect to SIM900"
         exit()
 
-    s.read_SMS("ALL")

@@ -19,15 +19,14 @@ def answer(question):
         if question == u"Балланс":
             return s.safe(s.ballance)
         elif question == u"СМС":
-            return s.safe(s.read_SMS)
+            return "\r\n".join(s.safe(s.read_SMS))
         elif question.find(u"СМС") == 0:
             _, number, text = question.split(",")
             number, text = number.strip(), text.strip()
             try:
                 text = text.encode()
-                s.safe(s.SMS, number, text)
-                s.safe(s.get_ret, 5)
-                return u"Сделано!" if s.OK else u"Неудача: " + s.r
+                mr = s.safe(s.SMS, number, text)
+                return u"Сделано! MR:" + str(mr) if mr else u"Неудача: " + s.cmd + u" -> " + s.r
             except UnicodeEncodeError:
                 return u"Сорян, юникод пока не поддерживается. Можешь сам дописать https://github.com/Himura2la/Skype2GSM"
     else:   # Input is in ASCII

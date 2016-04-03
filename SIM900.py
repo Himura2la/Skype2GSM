@@ -81,8 +81,10 @@ class SIM900(object):
             new_data = self.ser.read(self.read_size)  # delays for reading
             if not new_data:
                 skipped += 1
+                # print "skip", skipped
                 continue
             self.ans += new_data
+            # print "add: '" + new_data.replace("\n", "\\n").replace("\r", "\\r") + "'"
             skipped = 0
 
         if wait_for_transfer_end:
@@ -248,18 +250,17 @@ class SIM900(object):
         status, date, mystic_field, sender, text = array
         return "SMS(" + status + ")[" + date + "," + mystic_field + "," + sender + "]: " + text
 
-    def read_SMS(self, n="ALL", asText=True):
+    def read_SMS(self, n="ALL", as_text=True, leave_unread=False):
         if not self.AT("CMGF=1"):  # Switch from PDU
             print "Is anything works?"
             return False
 
         if type(n) is not str or len(n) == 1:  # Single reading
-            self.AT("CMGR=%s,0" % str(n), wait_for_data=0.3)
-            return self._process_SMS(self.ret, asText)
-
+            self.AT("CMGR=%s,%d" % (str(n), int(leave_unread)), wait_for_data=0.5)
+            return self._process_SMS(self.ret, as_text)
         else:   # Batch reading
-            self.AT('CMGL="%s",0' % n, wait_for_data=0.5)
-            return [self._process_SMS((self.ret[i], self.ret[i+1]), asText) for i in range(0, len(self.ret), 2)]
+            self.AT('CMGL="%s",%d' % (n, int(leave_unread)), wait_for_data=1)
+            return [self._process_SMS((self.ret[i], self.ret[i+1]), as_text) for i in range(0, len(self.ret), 2)]
 
     def del_SMS(self, scope, n=None):
         if scope == scopeOne:
@@ -267,9 +268,9 @@ class SIM900(object):
                 print "SMS to delete was not specified"
                 return False
         elif type(scope) is str:
-            self.AT('CMGDA="DEL ' + str(scope) + '"')
+            self.AT('CMGDA="DEL ' + str(scope) + '"', wait_for_data=1)
         else:
-            self.AT('CMGD=1,' + str(scope))
+            self.AT('CMGD=1,' + str(scope), wait_for_data=1)
         return self.OK
 
 # Constants for del_SMS(scope)
@@ -286,4 +287,3 @@ if __name__ == "__main__":
     else:
         print "Failed to connect to SIM900"
         exit()
-

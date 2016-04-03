@@ -13,30 +13,46 @@ except Exception, e:
 
 
 def answer(question):
+    question = question.strip()
     try:
         command = question.encode()
     except UnicodeEncodeError:  # Input is in Unicode
         if question == u"Балланс":
-            return s.safe(s.ballance)
+            return s.ballance()
         elif question == u"СМС":
-            return "\r\n".join(s.safe(s.read_SMS))
+            SMSki = s.read_SMS()
+            return "\r\n".join(SMSki) if SMSki else u"Эмпти ^_^"
+        elif question == u"Удаляй":
+            return u"Готово." if s.del_SMS(SIM900.scopeReadAndSent) else u"Блин..\r\n" + s.cmd + u" -> " + s.r
         elif question.find(u"СМС") == 0:
-            _, number, text = question.split(",")
+            _, number, text = question.split("  ")  # Two spaces is a non-sense for SMS :)
             number, text = number.strip(), text.strip()
             try:
                 text = text.encode()
-                mr = s.safe(s.SMS, number, text)
-                return u"Сделано! MR:" + str(mr) if mr else u"Неудача: " + s.cmd + u" -> " + s.r
+                mr = s.SMS(number, text)
+                return u"Сделано! MR:" + str(mr) if mr else u"Неудача Т_Т\r\n" + s.cmd + u" -> " + s.r
             except UnicodeEncodeError:
-                return u"Сорян, юникод пока не поддерживается. Можешь сам дописать https://github.com/Himura2la/Skype2GSM"
+                return u"Сорян, юникод пока не поддерживается. " + \
+                       u"Можешь сам дописать https://github.com/Himura2la/Skype2GSM"
     else:   # Input is in ASCII
+        wait_keyword = "wait"
         if command == "AT":
-            s.AT(safe=True)
-            return u"Нарм ^_^" if s.OK else u"Чот не ((\n" + s.r
+            s.AT()
+            return u"Нарм ^_^" if s.OK else u"Чот не ((\r\n" + s.r
+        elif command.find(wait_keyword) >= 0:
+            try:
+                time = int(command[command.find(wait_keyword)+len(wait_keyword)])  # Can add a digit in seconds
+                command = command.replace(wait_keyword + str(time), "").strip()
+            except (IndexError, ValueError):
+                time = 1
+                command = command.replace(wait_keyword, "").strip()
+            s.AT(command, wait_for_data=time)
+        else:
+            s.AT(command)
+        print s.r
+        return s.r
 
-        s.AT(command, safe=True)
-
-    return s.r
+    return u"Ты втираешь мне какую-то дичь!"
 
 
 def on_call(call, status):
@@ -64,7 +80,8 @@ skype.OnCallStatus = on_call
 def on_message(message, status):
     if status == Skype4Py.cmsReceived and message.Type == Skype4Py.cmeSaid:
         print "[" + str(message.Datetime) + "]", message.FromHandle + ":", message.Body
-        message.Chat.SendMessage(answer(message.Body))
+        response = s.safe(answer, message.Body)
+        message.Chat.SendMessage(response)
 
     if status == Skype4Py.cmsSent and message.Type == Skype4Py.cmeSaid:
         print "[" + str(message.Datetime) + "] Me:", message.Body
@@ -83,7 +100,7 @@ else:
 def check_incoming(data):
     if data.find('+CMTI: "SM"') >= 0:  # New SMS
         n = data.split(",")[1]
-        s.read_SMS(n)
+        s.read_SMS(n, leave_unread=True)
         # TODO: Send to Skype
 
 

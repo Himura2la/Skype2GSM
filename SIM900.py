@@ -4,10 +4,11 @@ import time
 import serial
 
 
-class SIM900:
+class SIM900(object):
     def __init__(self):
         self.baud_rate = 115200
-        self._timeout = 0.001
+        self.default_timeout = 0.001
+        self._timeout = self.default_timeout
         self.ser = serial.Serial("COM4", self.baud_rate, timeout=self.timeout)
         self.cmd = ""
         self.ans = ""
@@ -33,6 +34,9 @@ class SIM900:
         self._timeout = val
         self.ser.timeout = val
 
+    def reset_timeout(self):
+        self.timeout = self.default_timeout
+
     @property
     def r(self):
         if not self.ret:
@@ -46,37 +50,48 @@ class SIM900:
         else:
             return self.ret[0]
 
-    def _read_ans(self, max_wait, listener):
+    def get_ret(self, max_wait=1.0, listener=False, wait_for_transfer_end=False):
+        # self.cmd = self.cmd.replace("\n", "").replace("\r", "")
         if self.listening and not listener:
             print "Attempt to read while listening"
             return False
+
+        self.ret = []
+        self.OK = False
+        self.echoed = False
         self.ans = ""
-        skipped = 0
+
+        # Read data
+        self.communicating = True
 
         wait_begin = time.time()
         while not self.ans:  # Waiting for 1st byte
             self.ans += self.ser.read()
             if time.time() > wait_begin + max_wait:
+                print "He don't talk to me... T_T"
                 return False
 
-        while skipped < 5:
+        silence_threshold = 5
+
+        if wait_for_transfer_end:  # Wait for data for the entire timeout
+            self.timeout = max_wait / silence_threshold
+
+        skipped = 0
+        while skipped < silence_threshold:
             new_data = self.ser.read(self.read_size)  # delays for reading
             if not new_data:
                 skipped += 1
                 continue
             self.ans += new_data
             skipped = 0
-        return self.ans
 
-    def get_ret(self, max_wait=1, listener=False):
-        # self.cmd = self.cmd.replace("\n", "").replace("\r", "")
-        self.ret = []
-        self.OK = False
-        self.echoed = False
-        self.communicating = True
-        ans = self._read_ans(max_wait, listener)
+        if wait_for_transfer_end:
+            self.reset_timeout()
+
         self.communicating = False
-        if not ans:
+        # End reading
+
+        if not self.ans:
             return False
         for line in self.ans.split("\r"):
             clean_line = line.replace("\n", "")
@@ -88,7 +103,7 @@ class SIM900:
                 self.ret.append(clean_line)
         return self.ret
 
-    def AT(self, cmd="", safe=False):
+    def AT(self, cmd="", safe=False, wait_for_data=0.0):
         if safe:
             self._stop_listening()
         elif self.listening:
@@ -96,7 +111,16 @@ class SIM900:
             return False
         self.cmd = "AT" if len(cmd) == 0 else "AT+" + cmd
         self.ser.write(self.cmd + "\r")
-        self.get_ret()
+        if not wait_for_data:
+            self.get_ret()  # The quick response
+        else:
+            try:
+                val = float(wait_for_data)
+                if val <= 0.0:
+                    raise ValueError
+                self.get_ret(val, wait_for_transfer_end=True)  # The full response
+            except ValueError:
+                self.get_ret(1, wait_for_transfer_end=True)  # The default full response with 1s delay
         if safe:
             self.listening = True
         return self.OK
@@ -185,44 +209,57 @@ class SIM900:
                 ret = ans.split("OCTATOK ")[1].split(" p.")[0]
                 return float(ret)
 
+    def _process_SMS(self, sms):
+        if len(sms) != 2:
+            print "SMS not found"
+            return False
+        meta = sms[0].split('","')
+        text = sms[1]
+
+        if len(meta) == 4:
+            status, sender, mystic_field, date = meta
+        elif len(meta) == 3:
+            status, mystic_field, date = meta
+            sender = "Unknown"
+
+        else:
+            return None, None, "\\n".join(sms)
+
+        status = status.split('"')[1]
+        date = date.split('"')[0]
+
+        try:
+            for c in text: int(c, 16)
+        except ValueError:  # text string
+            pass
+        else:  # unicode string
+            text = self._decode_utf8(text)
+
+        print "SMS(" + status + ")[" + date + "," + mystic_field + "," + sender + "]: " + text
+        return date, sender, text
+
     def read_SMS(self, n):
         if not self.AT("CMGF=1"):  # Switch from PDU
             print "Is anything works?"
             return False
 
-        if type(n) is not str or len(n) == 1:
-            self.AT("CMGR=%s,0" % str(n))
+        if type(n) is not str or len(n) == 1:  # Single reading
+            self.AT("CMGR=%s,0" % str(n), wait_for_data=0.3)
+            return self._process_SMS(self.ret)
 
-            if not self.ret:
-                self.get_ret()  # Actual read
-            if len(self.ret) > 1:
-                _, sender, somefield, date = self.ret[0].split('","')
-                date = date.replace('"', '')
-                text = self.ret[1]
-
-                try:
-                    for c in text: int(c, 16)
-                except ValueError:  # text string
-                    pass
-                else:  # unicode string
-                    text = self._decode_utf8(text)
-
-                print "SMS[" + date + "," + somefield + "," + sender + "]: " + text
-                return date, sender, text
-        else:
-            self.AT('CMGL="%s",0' % n)
-            if not self.ret:
-                self.get_ret(5)  # Actual read
-            return self.ret
+        else:   # Batch reading
+            self.AT('CMGL="%s",0' % n, wait_for_data=0.5)
+            return [self._process_SMS((self.ret[i], self.ret[i+1])) for i in range(0, len(self.ret), 2)]
 
     def del_SMS(self, scope, n=None):
         if scope == scopeOne:
             if n is None:
                 print "SMS to delete was not specified"
                 return False
+        elif type(scope) is str:
+            self.AT('CMGDA="DEL ' + str(scope) + '"')
         else:
-            n = 1
-        self.AT('CMGD=' + str(n) + ',' + str(scope))
+            self.AT('CMGD=1,' + str(scope))
         return self.OK
 
 # Constants for del_SMS(scope)
@@ -240,4 +277,4 @@ if __name__ == "__main__":
         print "Failed to connect to SIM900"
         exit()
 
-    print s.read_SMS("ALL")
+    s.read_SMS("ALL")

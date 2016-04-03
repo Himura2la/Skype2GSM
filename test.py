@@ -1,18 +1,13 @@
-import threading
+def safe(f, *args):
+    print "safety on"
+    r = f(*args)
+    print "safety off"
+    return r
 
 
-def worker(num, callback):
-    if num > 2:
-        callback(num)
-    return
+def o(string, integer):
+    print string + str(integer + 1)
+    return "ret"
 
 
-def write(text):
-    print text
-
-threads = []
-for i in range(5):
-    t = threading.Thread(target=worker, args=(i, write,))
-    threads.append(t)
-    t.start()
-
+print safe(o, "work", 10)

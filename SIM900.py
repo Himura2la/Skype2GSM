@@ -68,7 +68,7 @@ class SIM900(object):
         while not self.ans:  # Waiting for 1st byte
             self.ans += self.ser.read()
             if time.time() > wait_begin + max_wait:
-                print "He don't talk to me... T_T"
+                self.communicating = False
                 return False
 
         silence_threshold = 5
@@ -131,13 +131,13 @@ class SIM900(object):
             pass
         return
 
-    def SMS(self, number, text):
+    def safe(self, f, *args):
         self._stop_listening()
-        r = self._unsafe_SMS(number, text)
+        r = f(*args)
         self.listening = True
         return r
 
-    def _unsafe_SMS(self, number, text):
+    def SMS(self, number, text):
         if not self.AT("CMGF=1"):
             print "Is anything works?"
             return False
@@ -147,6 +147,8 @@ class SIM900(object):
             self.ser.write(chr(27))  # Escape
             print "Sending '" + text + "' to '" + str(number) + "' FAILED: " + str(self.ret)
             return False
+
+        self.ser.write(chr(27))  # CANCEL SENDING
 
         self.ser.write(text + chr(26))
 
@@ -167,17 +169,16 @@ class SIM900(object):
 
         return False
 
-    def USSD(self, number):
-        self._stop_listening()
-        r = self._unsafe_USSD(number)
-        self.listening = True
-        return r
 
     @staticmethod
-    def _decode_utf8(byte_string):
+    def decode_utf8(byte_string):
         return ''.join([unichr(int(byte_string[i:i+4], 16)) for i in range(0, len(byte_string), 4)])
 
-    def _unsafe_USSD(self, number):
+    @staticmethod
+    def encode_utf8(text):
+        return ''.join([("%X" % ord(c)).zfill(4) for c in text])
+
+    def USSD(self, number):
         if self.AT('CUSD=1, "' + number + '"'):
             if self.r == "4":
                 print "Something went wrong while requesting " + number + ": " + s.ret[0]
@@ -198,7 +199,7 @@ class SIM900(object):
         print "SUCCESS!!!"
         ans = self.ret[0]
         ret = ans.split(",")[1].replace('"', '')
-        ret = self._decode_utf8(ret)
+        ret = self.decode_utf8(ret)
         return ret
 
     def ballance(self):
@@ -233,12 +234,12 @@ class SIM900(object):
         except ValueError:  # text string
             pass
         else:  # unicode string
-            text = self._decode_utf8(text)
+            text = self.decode_utf8(text)
 
         print "SMS(" + status + ")[" + date + "," + mystic_field + "," + sender + "]: " + text
         return date, sender, text
 
-    def read_SMS(self, n):
+    def read_SMS(self, n="ALL"):
         if not self.AT("CMGF=1"):  # Switch from PDU
             print "Is anything works?"
             return False

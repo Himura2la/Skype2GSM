@@ -2,7 +2,6 @@
 
 import Skype4Py
 import SIM900
-import smspdu
 
 skype = Skype4Py.Skype()
 try:
@@ -14,11 +13,30 @@ except Exception, e:
 
 
 def answer(question):
-    if question == u"Балланс":
-        return s.ballance()
+    try:
+        command = question.encode()
+    except UnicodeEncodeError:  # Input is in Unicode
+        if question == u"Балланс":
+            return s.safe(s.ballance)
+        elif question == u"СМС":
+            return s.safe(s.read_SMS)
+        elif question.find(u"СМС") == 0:
+            _, number, text = question.split(",")
+            number, text = number.strip(), text.strip()
+            try:
+                text = text.encode()
+                s.safe(s.SMS, number, text)
+                s.safe(s.get_ret, 5)
+                return u"Сделано!" if s.OK else u"Неудача: " + s.r
+            except UnicodeEncodeError:
+                return u"Сорян, юникод пока не поддерживается. Можешь сам дописать https://github.com/Himura2la/Skype2GSM"
+    else:   # Input is in ASCII
+        if command == "AT":
+            s.AT(safe=True)
+            return u"Нарм ^_^" if s.OK else u"Чот не ((\n" + s.r
 
-    command = question.encode(errors='ignore')
-    s.AT(command, safe=True)
+        s.AT(command, safe=True)
+
     return s.r
 
 

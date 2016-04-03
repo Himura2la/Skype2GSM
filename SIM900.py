@@ -38,7 +38,7 @@ class SIM900:
         if not self.ret:
             return "Echo:" + str(self.echoed) + \
                    ", OK:" + str(self.OK) + \
-                   "Ans:" + self.ans.replace("\n", "\\n").replace("\r", "\\r")
+                   ", Ans:" + self.ans.replace("\n", "\\n").replace("\r", "\\r")
         elif len(self.ret) > 1:
             return "\\n".join(self.ret)
         elif self.ret[0].find(': ') > 0:
@@ -71,6 +71,8 @@ class SIM900:
     def get_ret(self, max_wait=1, listener=False):
         # self.cmd = self.cmd.replace("\n", "").replace("\r", "")
         self.ret = []
+        self.OK = False
+        self.echoed = False
         self.communicating = True
         ans = self._read_ans(max_wait, listener)
         self.communicating = False
@@ -189,4 +191,15 @@ if __name__ == "__main__":
         print "Failed to connect to SIM900"
         exit()
 
-    print u"Балланс: %f" % s.ballance()
+    import smspdu
+
+    s.AT("CMGR=5,0")
+    if not s.ret:
+        s.get_ret()  # Actual read
+    if len(s.ret) > 1:
+        tpdu = s.ret[1]
+        pdu = smspdu.SMS_DELIVER.fromPDU(tpdu, "None")
+        print pdu.user_data
+
+
+    pass

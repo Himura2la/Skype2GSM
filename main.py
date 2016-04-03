@@ -2,6 +2,7 @@
 
 import Skype4Py
 import SIM900
+import smspdu
 
 skype = Skype4Py.Skype()
 try:
@@ -62,10 +63,31 @@ else:
     exit()
 
 
+def check_incoming(data):
+    if data.find('+CMTI: "SM"') >= 0:  # New SMS
+        n = data.split(",")[1]
+        if not s.AT("AT+CMGF=0"):  # Switch to PDU
+            print "Is anything works?"
+            return
+
+        s.AT("CMGR=" + n + ",0")  # Ask for SMS
+        if not s.ret:
+            s.get_ret()  # Actual read (there is a delay interrupting the communication)
+        if len(s.ret) > 1:
+            pdu = s.ret[1]
+
+
 waiting4call = True
 s.listening = True
 while True:
     if s.listening:
         current = s.get_ret(0.1, True)
         if current:
-            print "SIM900:", s.r
+            data = (''.join(s.ret))
+            print "SIM900:", data
+            s.listening = False
+            check_incoming(data)
+            s.listening = True
+
+
+

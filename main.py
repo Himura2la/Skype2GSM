@@ -17,7 +17,7 @@ def answer(question):
     try:
         command = question.encode()
     except UnicodeEncodeError:  # Input is in Unicode
-        if question == u"Балланс":
+        if question == u"Баланс":
             return s.ballance()
         elif question == u"СМС":
             SMSki = s.read_SMS()
@@ -49,7 +49,6 @@ def answer(question):
             s.AT(command, wait_for_data=time)
         else:
             s.AT(command)
-        print s.r
         return s.r
 
     if question.lower().find(u"привет") >= 0 or \
@@ -59,10 +58,10 @@ def answer(question):
                "Вот этот проект: https://github.com/Himura2la/Skype2GSM \r\n\r\n" + \
                "Команды бывают на русском и на нерусском. Команды на русском делают всё сразу и выводят красииво. " + \
                "Команды на нерусском интерпретируются как AT команды, и выхлоп с них почти необработанный. \r\n\r\n" + \
-               "Поддерживаются смски: Можно прочитать все входящие командой 'СМС', отправить смску той же командой, " + \
+               "Поддерживаются смски: Можно прочитать все входящие командой 'СМС', отправить смску той же командой, " +\
                "но дополненной ЧЕРЕЗ ДВА (или более) ПРОБЕЛА номером и ЧЕРЕЗ ДВА (или более) ПРОБЕЛА текстом " + \
                "(в котором нет двоыных пробелов). Удалить прочитанные, можно командой 'Удаляй'.\r\n\r\n" + \
-               "А еще, поддерживается запрос баланса. Надо написать 'Балланс'. Про ручное управление " + \
+               "А еще, поддерживается запрос баланса. Надо написать 'Баланс'. Про ручное управление " + \
                "расскажет команда 'Валяй'. Наслаждайтесь! (номер этого чуда записан на симке, читать AT-командами)"
 
     elif question.lower().find(u"валяй") >= 0:
@@ -82,7 +81,7 @@ def answer(question):
 def on_call(call, status):
     global waiting4call
     if status == Skype4Py.clsRinging and \
-                    call.Type in {Skype4Py.cltIncomingP2P, Skype4Py.cltIncomingPSTN} and waiting4call:
+       call.Type in {Skype4Py.cltIncomingP2P, Skype4Py.cltIncomingPSTN} and waiting4call:
         print 'Incoming call from:', call.PartnerHandle, "(" + call.PartnerDisplayName + ")"
         try:
             call.Answer()

@@ -5,11 +5,11 @@ import serial
 
 
 class SIM900(object):
-    def __init__(self):
+    def __init__(self, port):
         self.baud_rate = 115200
         self.default_timeout = 0.001
         self._timeout = self.default_timeout
-        self.ser = serial.Serial("COM4", self.baud_rate, timeout=self.timeout)
+        self.ser = serial.Serial(port, self.baud_rate, timeout=self.timeout)
         self.cmd = ""
         self.ans = ""
         self.ret = []
@@ -280,7 +280,7 @@ scopeReadAndSent = 3
 scopeAll = 4
 
 if __name__ == "__main__":
-    s = SIM900()
+    s = SIM900("COM4")
     if s.AT():
         s.AT("GMM")
         print "Connected to " + s.r

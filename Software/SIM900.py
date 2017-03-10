@@ -145,11 +145,14 @@ class SIM900(object):
             return False
 
         self.AT('CMGS="' + str(number) + '"')
-        if self.ret[0] != "> ":
-            self.cmd = str(chr(27))
-            self.ser.write(self.cmd)  # Escape
-            print "Sending '" + text + "' to '" + str(number) + "' FAILED: " + str(self.ret)
-            return False
+        try:
+            if self.ret[0] != '>':
+                self.cmd = str(chr(27))
+                self.ser.write(self.cmd)  # Escape
+                print "Sending '" + text + "' to '" + str(number) + "' FAILED: " + str(self.r)
+                return False
+        except IndexError:
+            print "Sending '" + text + "' to '" + str(number) + "' FAILED: " + str(self.r)
 
         self.cmd = text + chr(26)
         self.ser.write(self.cmd)
